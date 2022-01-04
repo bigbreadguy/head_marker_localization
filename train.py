@@ -258,6 +258,6 @@ def evaluate(args):
             canvas = np.zeros((368, 640, 3))
             canvas.fill(255)
 
-            paint = draw_body_box(canvas, test_pose[:, index, :2])
+            paint = draw_body_box(canvas, test_pose[:, index, :2], fps=33)
             writer.append_data(paint)
         writer.close()
