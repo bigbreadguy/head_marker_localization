@@ -114,7 +114,7 @@ def train(args):
             val_input = val_data["image"].to(device)
             val_target = val_data["label"].to(device)
 
-            for batch, data in enumerate(loader_train, 1):
+            for data in enumerate(loader_train, 1):
                 image = data["image"].to(device)
                 label = data["label"].to(device)
 
@@ -144,3 +144,22 @@ def train(args):
                 
             if early_stop.early_stop:
                 break
+
+def evaluate(args):
+    if args.mode=="test":
+        device = torch.device(args.cuda if torch.cuda.is_available() else "cpu")
+        
+        ckpt_dir = args.ckpt_dir
+        if not os.path.exists(ckpt_dir):
+            print("Cannot find trained model.")
+            return
+        
+        dataset_test = dataset.Dataset(data_dir=args.data_dir, type="test")
+        loader_test = torch.utils.data.DataLoader(dataset_test,
+                                batch_size=1,
+                                shuffle=True, num_workers=0)
+
+        net = model.ResNetRegressor(out_channels=2).to(device)
+        optim = torch.optim.Adam(net.parameters(), lr=2e-4, betas=(0.5, 0.999))
+
+        
