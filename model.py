@@ -1,6 +1,25 @@
+import os
 import torch
 import torchvision
 import torch.nn as nn
+
+def load_model(args, net, optim):
+    ckpt_dir = args.ckpt_dir
+    if not os.path.exists(ckpt_dir):
+        epoch = 0
+
+        return epoch, net
+    
+    device = torch.device(args.cuda if torch.cuda.is_available() else "cpu")
+
+    ckpt_lst = os.listdir(ckpt_dir)
+    ckpt_lst = [p for p in ckpt_lst if p.endswith("pth")]
+    ckpt_lst.sort(key=lambda f: int(''.join(filter(str.isdigit, f))))
+
+    dict_model = torch.load("%s/%s" % (ckpt_dir, ckpt_lst[-1]), map_location=device)
+
+    net.load_state_dict(dict_model["net"])
+    optim.load_state_dict(dict_model["optim"])
 
 class ResNetRegressor(nn.Module):
     """
