@@ -245,6 +245,7 @@ def evaluate(args):
 
                 output = net(image)
                 predict = output.to("cpu").detach().numpy()
+                print(predict.shape)
                 predict[0] *= predict[0] * (368/2) + 368
                 predict[1] *= predict[1] * (640/2) + 640
 
