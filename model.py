@@ -8,7 +8,7 @@ def load_model(args, net, optim):
     if not os.path.exists(ckpt_dir):
         epoch = 0
 
-        return epoch, net
+        return epoch, net, optim
     
     device = torch.device(args.cuda if torch.cuda.is_available() else "cpu")
 
@@ -20,6 +20,9 @@ def load_model(args, net, optim):
 
     net.load_state_dict(dict_model["net"])
     optim.load_state_dict(dict_model["optim"])
+    epoch = int(ckpt_lst[-1].split('epoch')[1].split('.pth')[0])
+
+    return epoch, net, optim
 
 class ResNetRegressor(nn.Module):
     """
