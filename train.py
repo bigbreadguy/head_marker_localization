@@ -255,9 +255,9 @@ def evaluate(args):
         title = os.path.splitext(os.path.basename(json_dir))[0]
         writer = iio.get_writer(os.path.join(result_dir, title + ".mp4"))
         for index in range(test_pose.shape[1]):
-            canvas = np.zeros((640, 368, 3))
+            canvas = np.zeros((368, 640, 3))
             canvas.fill(255)
 
             paint = draw_body_box(canvas, test_pose[:, index, :2])
-            writer.append(paint)
+            writer.append_data(paint)
         writer.close()
