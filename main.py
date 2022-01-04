@@ -41,6 +41,7 @@ if __name__ == "__main__":
         print("Training...")
         train.train(args)
     elif mode == "test":
-        print("Not defined yet!")
+        print("Evaluate")
+        train.evaluate(args)
     else:
         print("Not defined yet!")
