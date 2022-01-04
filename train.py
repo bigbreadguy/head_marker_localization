@@ -217,7 +217,7 @@ def evaluate(args):
             return
         
         dataset_dir = os.path.join(os.getcwd(), args.data_dir)
-        json_dir = glob.glob(os.path.join(dataset_dir, type, "*.json"))[0]
+        json_dir = glob.glob(os.path.join(dataset_dir, args.mode, "*.json"))[0]
         with open(json_dir, "r", encoding = "UTF-8-SIG") as file_read:
             test_pose_dict = json.load(file_read)
 
