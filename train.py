@@ -1,8 +1,14 @@
 import os
+import json
+import glob
+import cv2
+import math
 
 import numpy as np
 import torch
 import torch.nn as nn
+
+import imageio as iio
 
 import dataset
 import model
@@ -76,6 +82,62 @@ def set_requires_grad(nets, requires_grad=False):
         if net is not None:
             for param in net.parameters():
                 param.requires_grad = requires_grad
+
+def off_bound_check(canvas_shape, coord, grid=10):
+  # imageio의 프레임은 차원이 (h, w, c)인데 입력되는 좌표는 차원이 (w, h)로 구성됨.
+  if np.abs(coord[0]) < canvas_shape[1] // grid or np.abs(coord[0]) > canvas_shape[1] // grid * (grid-1):
+    h_off = True
+  else:
+    h_off = False
+  
+  if np.abs(coord[1]) < canvas_shape[1] // grid or np.abs(coord[1]) > canvas_shape[0] // grid * (grid-1):
+    w_off = True
+  else:
+    w_off = False
+  
+  return h_off or w_off
+
+def draw_body_box(canvas, coord, stickwidth=3, radius=10, dots=True, sticks=True):
+  limbSeq = [[2, 3], [2, 6], [3, 4], [4, 5], [6, 7], [7, 8], [9, 10], \
+            [10, 11], [12, 13], [13, 14], \
+            [3, 9], [6, 12], [9, 12]]
+
+  colors = [[210, 44, 230], [195, 41, 223], [175, 39, 211], [168, 38, 209], [158, 35, 203], [156, 35, 200], [137, 32, 194], \
+            [132, 30, 191], [122, 28, 186], [119, 28, 185], [111, 26, 179], [98, 24, 173], [95, 23, 171], [80, 18, 163], \
+            [77, 18, 167], [77, 18, 167], [77, 18, 167], [77, 18, 167]]
+
+  # 스켈레톤의 점을 렌더합니다.
+  if dots:
+    for i in range(14):
+      x, y = coord[i,:]
+      if not off_bound_check(canvas.shape, coord[i,:]):
+        # 마커의 인덱스가 0일 때(코 마커에서) 타원으로 얼굴 형태를 렌더합니다.
+        if i == 0:
+          # 인덱스 0인 코 마커를 중심으로 원형의 얼굴을 렌더하는 구문
+          cv2.circle(canvas, (int(x), int(y)), radius, colors[i], thickness=stickwidth)
+        else:
+          cv2.circle(canvas, (int(x), int(y)), stickwidth+1, colors[i], thickness=-1)
+
+  # 스켈레톤의 선을 렌더합니다.
+  if sticks:
+    for i in range(13):
+      index = np.array(limbSeq[i]) - 1
+      if off_bound_check(canvas.shape, coord[index[0].astype(int),:]):
+        continue
+
+      if not off_bound_check(canvas.shape, coord[index[1].astype(int), :]):
+        cur_canvas = canvas.copy()
+        Y = coord[index.astype(int), 0]
+        X = coord[index.astype(int), 1]
+        mX = np.mean(X)
+        mY = np.mean(Y)
+        length = ((X[0] - X[1]) ** 2 + (Y[0] - Y[1]) ** 2) ** 0.5
+        angle = math.degrees(math.atan2(X[0] - X[1], Y[0] - Y[1]))
+        polygon = cv2.ellipse2Poly((int(mY), int(mX)), (int(length / 2), stickwidth), int(angle), 0, 360, 1)
+        cv2.fillConvexPoly(cur_canvas, polygon, colors[i])
+        canvas = cv2.addWeighted(canvas, 0.4, cur_canvas, 0.6, 0)
+
+  return canvas
 
 def train(args):
     if args.mode=="train":
@@ -154,6 +216,13 @@ def evaluate(args):
             print("Cannot find trained model.")
             return
         
+        dataset_dir = os.path.join(os.getcwd(), args.data_dir)
+        json_dir = glob.glob(os.path.join(dataset_dir, type, "*.json"))[0]
+        with open(json_dir, "r", encoding = "UTF-8-SIG") as file_read:
+            test_pose_dict = json.load(file_read)
+
+        test_pose = dataset.filtering_process(dataset.dict2array(test_pose_dict))
+
         dataset_test = dataset.Dataset(data_dir=args.data_dir, type="test")
         loader_test = torch.utils.data.DataLoader(dataset_test,
                                 batch_size=1,
@@ -162,4 +231,33 @@ def evaluate(args):
         net = model.ResNetRegressor(out_channels=2).to(device)
         optim = torch.optim.Adam(net.parameters(), lr=2e-4, betas=(0.5, 0.999))
 
-        
+        epoch, net, optim = model.load_model(args=args,
+                                            net=net,
+                                            optim=optim)
+
+        with torch.no_grad():
+            net.eval()
+
+            evals = []
+
+            for batch_idx, data in enumerate(loader_test):
+                image = data["image"].to(device)
+
+                output = net(image)
+                predict = output.to("cpu").detach().numpy()
+
+                test_pose[0, batch_idx, :] = predict
+
+        result_dir = os.path.join(os.getcwd(), "result")
+        if not os.path.exists(result_dir):
+            os.makedirs(result_dir)
+
+        title = os.path.splitext(os.path.basename(json_dir))[0]
+        writer = iio.get_writer(os.path.join(result_dir, title + ".mp4"))
+        for index in range(test_pose.shape[1]):
+            canvas = np.zeros((640, 368, 3))
+            canvas.fill(255)
+
+            paint = draw_body_box(canvas, test_pose[:, index, :2])
+            writer.append(paint)
+        writer.close()
